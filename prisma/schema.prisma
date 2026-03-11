@@ -1,0 +1,100 @@
+// Fitway Gym CRM - Database Schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model GymOwner {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  gymName   String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members         Member[]
+  membershipPlans MembershipPlan[]
+
+  @@map("gym_owners")
+}
+
+model Member {
+  id         String   @id @default(cuid())
+  gymOwnerId String
+  name       String
+  phone      String
+  email      String?
+  photoUrl   String?
+  address    String?
+  joinDate   DateTime @default(now())
+  notes      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  gymOwner    GymOwner     @relation(fields: [gymOwnerId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+
+  @@index([gymOwnerId])
+  @@index([phone])
+  @@map("members")
+}
+
+model MembershipPlan {
+  id           String   @id @default(cuid())
+  gymOwnerId   String
+  name         String
+  durationDays Int
+  price        Float
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gymOwner    GymOwner     @relation(fields: [gymOwnerId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+
+  @@index([gymOwnerId])
+  @@map("membership_plans")
+}
+
+enum PaymentStatus {
+  PAID
+  DUE
+  PARTIAL
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+model Membership {
+  id            String        @id @default(cuid())
+  memberId      String
+  planId        String
+  startDate     DateTime
+  endDate       DateTime
+  amountPaid    Float
+  paymentStatus PaymentStatus @default(PAID)
+  paymentMode   PaymentMode   @default(CASH)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  member Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan   MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([memberId])
+  @@index([endDate])
+  @@map("memberships")
+}
