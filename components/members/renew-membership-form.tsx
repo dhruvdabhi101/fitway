@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -19,59 +21,72 @@ interface RenewMembershipFormProps {
   onCancel: () => void;
 }
 
+interface RenewMembershipFormValues {
+  planId: string;
+  amountPaid: string;
+  paymentMode: string;
+  startDate: string;
+}
+
 export function RenewMembershipForm({
   memberId,
   onSuccess,
   onCancel,
 }: RenewMembershipFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [formData, setFormData] = useState({
-    planId: "",
-    amountPaid: "",
-    paymentMode: "CASH",
-    startDate: new Date().toISOString().split("T")[0],
-  });
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  const fetchPlans = async () => {
-    try {
+  const {
+    data: plans = [],
+    isLoading: isPlansLoading,
+    error: plansError,
+  } = useQuery<Plan[]>({
+    queryKey: ["plans"],
+    queryFn: async () => {
       const res = await fetch("/api/plans");
       const data = await res.json();
-      setPlans(data.plans || []);
-      if (data.plans?.length > 0) {
-        setFormData((prev) => ({ ...prev, planId: data.plans[0].id }));
+      return data.plans || [];
+    },
+  });
+
+  const defaultStartDate = new Date().toISOString().split("T")[0];
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { isSubmitting, errors },
+  } = useForm<RenewMembershipFormValues>({
+    defaultValues: {
+      planId: "",
+      amountPaid: "",
+      paymentMode: "CASH",
+      startDate: defaultStartDate,
+    },
+  });
+
+  const selectedPlanId = watch("planId");
+  const selectedPlan = (plans as Plan[]).find((p) => p.id === selectedPlanId);
+
+  useEffect(() => {
+    if (plans.length > 0 && !selectedPlanId) {
+      setValue("planId", plans[0].id);
+    }
+  }, [plans, selectedPlanId, setValue]);
+
+  const renewMembershipMutation = useMutation({
+    mutationFn: async (values: RenewMembershipFormValues) => {
+      if (!values.planId) {
+        throw new Error("Please select a plan");
       }
-    } catch (error) {
-      console.error("Failed to fetch plans:", error);
-    }
-  };
 
-  const selectedPlan = plans.find((p) => p.id === formData.planId);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    if (!formData.planId) {
-      setError("Please select a plan");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
       const res = await fetch(`/api/members/${memberId}/renew`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          amountPaid: formData.amountPaid
-            ? parseFloat(formData.amountPaid)
+          ...values,
+          amountPaid: values.amountPaid
+            ? parseFloat(values.amountPaid)
             : selectedPlan?.price,
         }),
       });
@@ -81,19 +96,30 @@ export function RenewMembershipForm({
         throw new Error(data.error || "Failed to renew membership");
       }
 
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["member", memberId] });
+      queryClient.invalidateQueries({ queryKey: ["payments-due"] });
       onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    await renewMembershipMutation.mutateAsync(values);
+  });
+
+  const globalError =
+    (plansError instanceof Error && plansError.message) ||
+    (renewMembershipMutation.error instanceof Error &&
+      renewMembershipMutation.error.message) ||
+    "";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {globalError && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100">
-          {error}
+          {globalError}
         </div>
       )}
 
@@ -115,15 +141,9 @@ export function RenewMembershipForm({
           <Select
             id="planId"
             label="Membership Plan *"
-            value={formData.planId}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                planId: e.target.value,
-                amountPaid: "",
-              })
-            }
+            {...register("planId", { required: "Plan is required" })}
             required
+            error={errors.planId?.message}
           >
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>
@@ -137,10 +157,8 @@ export function RenewMembershipForm({
             id="startDate"
             type="date"
             label="Start Date"
-            value={formData.startDate}
-            onChange={(e) =>
-              setFormData({ ...formData, startDate: e.target.value })
-            }
+            {...register("startDate", { required: "Start date is required" })}
+            error={errors.startDate?.message}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -149,18 +167,12 @@ export function RenewMembershipForm({
               type="number"
               label="Amount Paid"
               placeholder={selectedPlan ? `${selectedPlan.price}` : "0"}
-              value={formData.amountPaid}
-              onChange={(e) =>
-                setFormData({ ...formData, amountPaid: e.target.value })
-              }
+              {...register("amountPaid")}
             />
             <Select
               id="paymentMode"
               label="Payment Mode"
-              value={formData.paymentMode}
-              onChange={(e) =>
-                setFormData({ ...formData, paymentMode: e.target.value })
-              }
+              {...register("paymentMode")}
             >
               <option value="CASH">Cash</option>
               <option value="UPI">UPI</option>
@@ -179,7 +191,13 @@ export function RenewMembershipForm({
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading} className="flex-1">
+            <Button
+              type="submit"
+              isLoading={
+                renewMembershipMutation.isPending || isSubmitting || isPlansLoading
+              }
+              className="flex-1"
+            >
               Renew Membership
             </Button>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, use } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -53,50 +54,47 @@ export default function MemberProfilePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const [member, setMember] = useState<Member | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchMember = async () => {
-    try {
+  const {
+    data: member,
+    isLoading,
+  } = useQuery<Member | null>({
+    queryKey: ["member", id],
+    queryFn: async () => {
       const res = await fetch(`/api/members/${id}`);
       if (!res.ok) {
         router.push("/members");
-        return;
+        return null;
       }
       const data = await res.json();
-      setMember(data.member);
-    } catch (error) {
-      console.error("Failed to fetch member:", error);
-      router.push("/members");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data.member as Member;
+    },
+  });
 
-  useEffect(() => {
-    fetchMember();
-  }, [id]);
-
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this member?")) return;
-
-    setIsDeleting(true);
-    try {
+  const deleteMemberMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch(`/api/members/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        router.push("/members");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete member");
       }
-    } catch (error) {
-      console.error("Failed to delete member:", error);
-    } finally {
-      setIsDeleting(false);
-    }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      router.push("/members");
+    },
+  });
+
+  const handleDelete = () => {
+    if (!confirm("Are you sure you want to delete this member?")) return;
+    deleteMemberMutation.mutate();
   };
 
-  if (isLoading) {
+  if (isLoading || !member) {
     return (
       <div className="p-4 lg:p-8">
         <div className="h-8 w-32 bg-slate-200 rounded-lg animate-pulse mb-6" />
@@ -104,8 +102,6 @@ export default function MemberProfilePage({
       </div>
     );
   }
-
-  if (!member) return null;
 
   const currentMembership = member.memberships[0];
   const status = currentMembership
@@ -208,7 +204,7 @@ export default function MemberProfilePage({
             <Button
               variant="danger"
               onClick={handleDelete}
-              isLoading={isDeleting}
+              isLoading={deleteMemberMutation.isPending}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
@@ -305,7 +301,7 @@ export default function MemberProfilePage({
           member={member}
           onSuccess={() => {
             setIsEditModalOpen(false);
-            fetchMember();
+            queryClient.invalidateQueries({ queryKey: ["member", id] });
           }}
           onCancel={() => setIsEditModalOpen(false)}
         />
@@ -321,7 +317,6 @@ export default function MemberProfilePage({
           memberId={member.id}
           onSuccess={() => {
             setIsRenewModalOpen(false);
-            fetchMember();
           }}
           onCancel={() => setIsRenewModalOpen(false)}
         />

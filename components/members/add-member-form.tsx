@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -18,50 +20,72 @@ interface AddMemberFormProps {
   onCancel: () => void;
 }
 
+interface AddMemberFormValues {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  planId: string;
+  amountPaid: string;
+  paymentMode: string;
+}
+
 export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    address: "",
-    notes: "",
-    planId: "",
-    amountPaid: "",
-    paymentMode: "CASH",
-  });
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  const fetchPlans = async () => {
-    try {
+  const {
+    data: plans = [],
+    isLoading: isPlansLoading,
+    error: plansError,
+  } = useQuery<Plan[]>({
+    queryKey: ["plans"],
+    queryFn: async () => {
       const res = await fetch("/api/plans");
       const data = await res.json();
-      setPlans(data.plans || []);
-    } catch (error) {
-      console.error("Failed to fetch plans:", error);
+      return data.plans || [];
+    },
+  });
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    setValue,
+    formState: { isSubmitting, errors },
+  } = useForm<AddMemberFormValues>({
+    defaultValues: {
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      notes: "",
+      planId: "",
+      amountPaid: "",
+      paymentMode: "CASH",
+    },
+  });
+
+  const selectedPlanId = watch("planId");
+  const plansMap = plans as Plan[];
+  const selectedPlan = plansMap.find((p) => p.id === selectedPlanId);
+
+  useEffect(() => {
+    if (!selectedPlanId) {
+      setValue("amountPaid", "");
     }
-  };
+  }, [selectedPlanId, setValue]);
 
-  const selectedPlan = plans.find((p) => p.id === formData.planId);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    try {
+  const addMemberMutation = useMutation({
+    mutationFn: async (values: AddMemberFormValues) => {
       const res = await fetch("/api/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          amountPaid: formData.amountPaid
-            ? parseFloat(formData.amountPaid)
+          ...values,
+          amountPaid: values.amountPaid
+            ? parseFloat(values.amountPaid)
             : selectedPlan?.price,
         }),
       });
@@ -71,19 +95,30 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         throw new Error(data.error || "Failed to add member");
       }
 
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      reset();
       onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    await addMemberMutation.mutateAsync(values);
+  });
+
+  const globalError =
+    (plansError instanceof Error && plansError.message) ||
+    (addMemberMutation.error instanceof Error &&
+      addMemberMutation.error.message) ||
+    "";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {globalError && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100">
-          {error}
+          {globalError}
         </div>
       )}
 
@@ -92,17 +127,17 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
           id="name"
           label="Name *"
           placeholder="Member name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          {...register("name", { required: "Name is required" })}
           required
+          error={errors.name?.message}
         />
         <Input
           id="phone"
           label="Phone *"
           placeholder="+91 9876543210"
-          value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          {...register("phone", { required: "Phone is required" })}
           required
+          error={errors.phone?.message}
         />
       </div>
 
@@ -111,16 +146,14 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         type="email"
         label="Email"
         placeholder="member@email.com"
-        value={formData.email}
-        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+        {...register("email")}
       />
 
       <Input
         id="address"
         label="Address"
         placeholder="Full address"
-        value={formData.address}
-        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+        {...register("address")}
       />
 
       <div className="border-t border-slate-100 pt-4 mt-4">
@@ -129,14 +162,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         <Select
           id="planId"
           label="Membership Plan"
-          value={formData.planId}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              planId: e.target.value,
-              amountPaid: "",
-            })
-          }
+          {...register("planId")}
         >
           <option value="">Select a plan (optional)</option>
           {plans.map((plan) => (
@@ -147,25 +173,19 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
           ))}
         </Select>
 
-        {formData.planId && (
+        {selectedPlanId && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <Input
               id="amountPaid"
               type="number"
               label="Amount Paid"
               placeholder={selectedPlan ? `${selectedPlan.price}` : "0"}
-              value={formData.amountPaid}
-              onChange={(e) =>
-                setFormData({ ...formData, amountPaid: e.target.value })
-              }
+              {...register("amountPaid")}
             />
             <Select
               id="paymentMode"
               label="Payment Mode"
-              value={formData.paymentMode}
-              onChange={(e) =>
-                setFormData({ ...formData, paymentMode: e.target.value })
-              }
+              {...register("paymentMode")}
             >
               <option value="CASH">Cash</option>
               <option value="UPI">UPI</option>
@@ -181,8 +201,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         id="notes"
         label="Notes"
         placeholder="Any additional notes..."
-        value={formData.notes}
-        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+        {...register("notes")}
       />
 
       <div className="flex gap-3 pt-4">
@@ -194,7 +213,11 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         >
           Cancel
         </Button>
-        <Button type="submit" isLoading={isLoading} className="flex-1">
+        <Button
+          type="submit"
+          isLoading={addMemberMutation.isPending || isSubmitting || isPlansLoading}
+          className="flex-1"
+        >
           Add Member
         </Button>
       </div>

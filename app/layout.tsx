@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { QueryProvider } from "@/components/query-provider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -62,7 +63,7 @@ export default function RootLayout({
         <link rel="mask-icon" href="/icons/icon-512.png" color="#059669" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

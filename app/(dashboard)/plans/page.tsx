@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -8,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Plus, CreditCard, Edit, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useForm } from "react-hook-form";
 
 interface Plan {
   id: string;
@@ -17,38 +19,39 @@ interface Plan {
 }
 
 export default function PlansPage() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchPlans = async () => {
-    try {
+  const {
+    data: plans = [],
+    isLoading,
+  } = useQuery<Plan[]>({
+    queryKey: ["plans"],
+    queryFn: async () => {
       const res = await fetch("/api/plans");
       const data = await res.json();
-      setPlans(data.plans || []);
-    } catch (error) {
-      console.error("Failed to fetch plans:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data.plans || [];
+    },
+  });
 
-  useEffect(() => {
-    fetchPlans();
-  }, []);
+  const deletePlanMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete plan");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+    },
+  });
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this plan?")) return;
-
-    try {
-      const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        fetchPlans();
-      }
-    } catch (error) {
-      console.error("Failed to delete plan:", error);
-    }
+    deletePlanMutation.mutate(id);
   };
 
   return (
@@ -133,7 +136,7 @@ export default function PlansPage() {
         <PlanForm
           onSuccess={() => {
             setIsAddModalOpen(false);
-            fetchPlans();
+            queryClient.invalidateQueries({ queryKey: ["plans"] });
           }}
           onCancel={() => setIsAddModalOpen(false)}
         />
@@ -150,7 +153,7 @@ export default function PlansPage() {
             plan={editingPlan}
             onSuccess={() => {
               setEditingPlan(null);
-              fetchPlans();
+              queryClient.invalidateQueries({ queryKey: ["plans"] });
             }}
             onCancel={() => setEditingPlan(null)}
           />
@@ -167,12 +170,52 @@ interface PlanFormProps {
 }
 
 function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [formData, setFormData] = useState({
-    name: plan?.name || "",
-    durationDays: plan?.durationDays.toString() || "30",
-    price: plan?.price.toString() || "",
+  const { register, handleSubmit, setValue, formState, watch } = useForm<{
+    name: string;
+    durationDays: string;
+    price: string;
+  }>({
+    defaultValues: {
+      name: plan?.name || "",
+      durationDays:
+        typeof plan?.durationDays === "number"
+          ? plan.durationDays.toString()
+          : "30",
+      price:
+        typeof plan?.price === "number" ? plan.price.toString() : "",
+    },
+  });
+
+  const { errors, isSubmitting } = formState;
+
+  const queryClient = useQueryClient();
+
+  const savePlanMutation = useMutation({
+    mutationFn: async (values: {
+      name: string;
+      durationDays: string;
+      price: string;
+    }) => {
+      const url = plan ? `/api/plans/${plan.id}` : "/api/plans";
+      const method = plan ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save plan");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      onSuccess();
+    },
   });
 
   const presetDurations = [
@@ -182,39 +225,15 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
     { label: "12 Months", days: 365 },
   ];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const url = plan ? `/api/plans/${plan.id}` : "/api/plans";
-      const method = plan ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to save plan");
-      }
-
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    await savePlanMutation.mutateAsync(values);
+  });
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {savePlanMutation.error instanceof Error && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100">
-          {error}
+          {savePlanMutation.error.message}
         </div>
       )}
 
@@ -222,9 +241,9 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
         id="name"
         label="Plan Name *"
         placeholder="e.g., Monthly, Quarterly"
-        value={formData.name}
-        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        {...register("name", { required: "Plan name is required" })}
         required
+        error={errors.name?.message}
       />
 
       <div>
@@ -236,11 +255,9 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
             <button
               key={preset.days}
               type="button"
-              onClick={() =>
-                setFormData({ ...formData, durationDays: preset.days.toString() })
-              }
+              onClick={() => setValue("durationDays", preset.days.toString())}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                formData.durationDays === preset.days.toString()
+                watch("durationDays") === preset.days.toString()
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
@@ -253,11 +270,11 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
           id="durationDays"
           type="number"
           placeholder="Custom days"
-          value={formData.durationDays}
-          onChange={(e) =>
-            setFormData({ ...formData, durationDays: e.target.value })
-          }
+          {...register("durationDays", {
+            required: "Duration is required",
+          })}
           required
+          error={errors.durationDays?.message}
         />
       </div>
 
@@ -266,9 +283,9 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
         type="number"
         label="Price (INR) *"
         placeholder="e.g., 1000"
-        value={formData.price}
-        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+        {...register("price", { required: "Price is required" })}
         required
+        error={errors.price?.message}
       />
 
       <div className="flex gap-3 pt-4">
@@ -280,7 +297,11 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
         >
           Cancel
         </Button>
-        <Button type="submit" isLoading={isLoading} className="flex-1">
+        <Button
+          type="submit"
+          isLoading={savePlanMutation.isPending || isSubmitting}
+          className="flex-1"
+        >
           {plan ? "Save Changes" : "Create Plan"}
         </Button>
       </div>

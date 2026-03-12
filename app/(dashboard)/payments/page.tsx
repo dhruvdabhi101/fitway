@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,27 +30,21 @@ interface Membership {
 type FilterType = "all" | "overdue" | "expiring";
 
 export default function PaymentsPage() {
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
   const [renewingMemberId, setRenewingMemberId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchMemberships = async () => {
-    try {
+  const {
+    data: memberships = [],
+    isLoading,
+  } = useQuery<Membership[]>({
+    queryKey: ["payments-due", filter],
+    queryFn: async () => {
       const res = await fetch(`/api/payments/due?filter=${filter}`);
       const data = await res.json();
-      setMemberships(data.memberships || []);
-    } catch (error) {
-      console.error("Failed to fetch memberships:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setIsLoading(true);
-    fetchMemberships();
-  }, [filter]);
+      return data.memberships || [];
+    },
+  });
 
   const filters: { label: string; value: FilterType }[] = [
     { label: "All Due", value: "all" },
@@ -183,7 +178,7 @@ export default function PaymentsPage() {
             memberId={renewingMemberId}
             onSuccess={() => {
               setRenewingMemberId(null);
-              fetchMemberships();
+              queryClient.invalidateQueries({ queryKey: ["payments-due"] });
             }}
             onCancel={() => setRenewingMemberId(null)}
           />
