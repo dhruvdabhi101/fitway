@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -19,31 +20,41 @@ interface EditMemberFormProps {
   onCancel: () => void;
 }
 
+interface EditMemberFormValues {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+}
+
 export function EditMemberForm({
   member,
   onSuccess,
   onCancel,
 }: EditMemberFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [formData, setFormData] = useState({
-    name: member.name,
-    phone: member.phone,
-    email: member.email || "",
-    address: member.address || "",
-    notes: member.notes || "",
+  const queryClient = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting, errors },
+  } = useForm<EditMemberFormValues>({
+    defaultValues: {
+      name: member.name,
+      phone: member.phone,
+      email: member.email || "",
+      address: member.address || "",
+      notes: member.notes || "",
+    },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    try {
+  const editMemberMutation = useMutation({
+    mutationFn: async (values: EditMemberFormValues) => {
       const res = await fetch(`/api/members/${member.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(values),
       });
 
       if (!res.ok) {
@@ -51,19 +62,29 @@ export function EditMemberForm({
         throw new Error(data.error || "Failed to update member");
       }
 
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["member", member.id] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
       onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    await editMemberMutation.mutateAsync(values);
+  });
+
+  const globalError =
+    editMemberMutation.error instanceof Error
+      ? editMemberMutation.error.message
+      : "";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {globalError && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100">
-          {error}
+          {globalError}
         </div>
       )}
 
@@ -71,16 +92,16 @@ export function EditMemberForm({
         <Input
           id="name"
           label="Name *"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          {...register("name", { required: "Name is required" })}
           required
+          error={errors.name?.message}
         />
         <Input
           id="phone"
           label="Phone *"
-          value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          {...register("phone", { required: "Phone is required" })}
           required
+          error={errors.phone?.message}
         />
       </div>
 
@@ -88,22 +109,19 @@ export function EditMemberForm({
         id="email"
         type="email"
         label="Email"
-        value={formData.email}
-        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+        {...register("email")}
       />
 
       <Input
         id="address"
         label="Address"
-        value={formData.address}
-        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+        {...register("address")}
       />
 
       <Input
         id="notes"
         label="Notes"
-        value={formData.notes}
-        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+        {...register("notes")}
       />
 
       <div className="flex gap-3 pt-4">
@@ -115,7 +133,11 @@ export function EditMemberForm({
         >
           Cancel
         </Button>
-        <Button type="submit" isLoading={isLoading} className="flex-1">
+        <Button
+          type="submit"
+          isLoading={editMemberMutation.isPending || isSubmitting}
+          className="flex-1"
+        >
           Save Changes
         </Button>
       </div>

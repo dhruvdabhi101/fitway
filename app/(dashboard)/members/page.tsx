@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,31 +28,35 @@ interface Member {
 }
 
 export default function MembersPage() {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  const fetchMembers = async () => {
-    try {
-      const res = await fetch(`/api/members?search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      setMembers(data.members || []);
-    } catch (error) {
-      console.error("Failed to fetch members:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const debounce = setTimeout(fetchMembers, 300);
-    return () => clearTimeout(debounce);
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timeout);
   }, [search]);
+
+  const {
+    data: members = [],
+    isLoading,
+  } = useQuery<Member[]>({
+    queryKey: ["members", debouncedSearch],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/members?search=${encodeURIComponent(debouncedSearch)}`
+      );
+      const data = await res.json();
+      return data.members || [];
+    },
+  });
 
   const handleAddSuccess = () => {
     setIsAddModalOpen(false);
-    fetchMembers();
+    queryClient.invalidateQueries({ queryKey: ["members"] });
   };
 
   return (
@@ -118,7 +123,7 @@ export default function MembersPage() {
               <Link key={member.id} href={`/members/${member.id}`}>
                 <Card className="p-4 hover:border-emerald-200 hover:shadow-md transition-all duration-200 cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden shrink-0">
                       {member.photoUrl ? (
                         <img
                           src={member.photoUrl}
@@ -171,7 +176,7 @@ export default function MembersPage() {
                             ? "warning"
                             : "danger"
                         }
-                        className="sm:hidden flex-shrink-0"
+                        className="sm:hidden shrink-0"
                       >
                         {status.label}
                       </Badge>
