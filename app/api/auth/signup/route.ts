@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { successResponse, errorResponse, validationErrorResponse } from "@/lib/api-response";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,17 @@ export async function POST(request: NextRequest) {
         gymName: gymName || null,
         phone: phone || null,
       },
+    });
+
+    const posthog = getPostHogClient();
+    posthog.identify({
+      distinctId: user.email,
+      properties: { name: user.name, email: user.email, gymName: gymName || null },
+    });
+    posthog.capture({
+      distinctId: user.email,
+      event: "gym_owner_signed_up",
+      properties: { name: user.name, email: user.email, gymName: gymName || null },
     });
 
     return successResponse(

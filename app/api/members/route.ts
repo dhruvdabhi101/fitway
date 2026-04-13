@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { successResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api-response";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,6 +116,18 @@ export async function POST(request: NextRequest) {
           take: 1,
           include: { plan: true },
         },
+      },
+    });
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: session.user.email ?? session.user.id,
+      event: "member_created_server",
+      properties: {
+        member_id: member.id,
+        plan_id: planId || null,
+        amount_paid: amountPaid || null,
+        payment_mode: paymentMode || null,
       },
     });
 

@@ -21,6 +21,7 @@ import {
   FileText,
 } from "lucide-react";
 import { formatDate, formatCurrency, getMembershipStatus } from "@/lib/utils";
+import posthog from "posthog-js";
 import { useMember, useDeleteMember } from "@src/queries/member.queries";
 import type { MemberWithMemberships } from "@src/api/types";
 
@@ -40,7 +41,10 @@ export default function MemberProfilePage({
   const handleDelete = () => {
     if (!confirm("Are you sure you want to delete this member?")) return;
     deleteMember.mutate(id, {
-      onSuccess: () => router.push("/members"),
+      onSuccess: () => {
+        posthog.capture("member_deleted", { member_id: id });
+        router.push("/members");
+      },
     });
   };
 

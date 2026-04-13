@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,10 +33,13 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
+        posthog.identify(formData.email, { email: formData.email });
+        posthog.capture("gym_owner_logged_in", { email: formData.email });
         router.push("/dashboard");
         router.refresh();
       }
-    } catch {
+    } catch (err) {
+      posthog.captureException(err);
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

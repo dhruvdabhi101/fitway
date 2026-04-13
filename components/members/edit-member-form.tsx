@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUpdateMember } from "@src/queries/member.queries";
@@ -50,6 +51,7 @@ export function EditMemberForm({
       notes: values.notes || undefined,
     };
     await updateMember.mutateAsync({ id: member.id, data });
+    posthog.capture("member_updated", { member_id: member.id });
     onSuccess();
   });
 

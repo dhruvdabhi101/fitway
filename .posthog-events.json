@@ -1,0 +1,57 @@
+[
+  {
+    "event": "gym_owner_signed_up",
+    "description": "Fired when a new gym owner successfully registers an account",
+    "file": "app/api/auth/signup/route.ts"
+  },
+  {
+    "event": "gym_owner_logged_in",
+    "description": "Fired when a gym owner successfully signs in on the client side",
+    "file": "app/(auth)/login/page.tsx"
+  },
+  {
+    "event": "member_added",
+    "description": "Fired when a gym member is successfully added (client-side, with plan and payment details)",
+    "file": "components/members/add-member-form.tsx"
+  },
+  {
+    "event": "membership_renewed",
+    "description": "Fired when a member's membership is successfully renewed (client-side)",
+    "file": "components/members/renew-membership-form.tsx"
+  },
+  {
+    "event": "member_updated",
+    "description": "Fired when a gym member's profile details are successfully updated",
+    "file": "components/members/edit-member-form.tsx"
+  },
+  {
+    "event": "member_deleted",
+    "description": "Fired when a gym member is permanently deleted from the system",
+    "file": "app/(dashboard)/members/[id]/page.tsx"
+  },
+  {
+    "event": "plan_created",
+    "description": "Fired when a new membership plan is created (name, duration, price)",
+    "file": "app/(dashboard)/plans/page.tsx"
+  },
+  {
+    "event": "plan_updated",
+    "description": "Fired when an existing membership plan is updated",
+    "file": "app/(dashboard)/plans/page.tsx"
+  },
+  {
+    "event": "plan_deleted",
+    "description": "Fired when a membership plan is deleted",
+    "file": "app/(dashboard)/plans/page.tsx"
+  },
+  {
+    "event": "member_created_server",
+    "description": "Server-side event fired when a new member is successfully created via the API",
+    "file": "app/api/members/route.ts"
+  },
+  {
+    "event": "membership_renewed_server",
+    "description": "Server-side event fired when a membership is successfully renewed via the API",
+    "file": "app/api/members/[id]/renew/route.ts"
+  }
+]

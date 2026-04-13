@@ -159,7 +159,8 @@ export function useRenewMembership() {
       memberService.renew(id, data),
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.payments.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
     },
   });
 }

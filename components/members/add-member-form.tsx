@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -69,6 +70,12 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
       planId: values.planId || undefined,
       amountPaid: values.amountPaid ? parseFloat(values.amountPaid) : undefined,
       paymentMode: values.paymentMode as "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER",
+    });
+    posthog.capture("member_added", {
+      plan_id: values.planId || null,
+      plan_name: selectedPlan?.name || null,
+      amount_paid: values.amountPaid ? parseFloat(values.amountPaid) : null,
+      payment_mode: values.paymentMode,
     });
     reset();
     onSuccess();

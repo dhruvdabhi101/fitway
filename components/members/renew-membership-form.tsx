@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -70,6 +71,14 @@ export function RenewMembershipForm({
         paymentMode: values.paymentMode as "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER",
         startDate: values.startDate,
       },
+    });
+    posthog.capture("membership_renewed", {
+      member_id: memberId,
+      plan_id: values.planId,
+      plan_name: selectedPlan?.name || null,
+      amount_paid: values.amountPaid ? parseFloat(values.amountPaid) : null,
+      payment_mode: values.paymentMode,
+      start_date: values.startDate,
     });
     onSuccess();
   });

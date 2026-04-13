@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, CreditCard, Edit, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useForm } from "react-hook-form";
+import posthog from "posthog-js";
 import { usePlans, useCreatePlan, useUpdatePlan, useDeletePlan } from "@src/queries/plan.queries";
 import type { MembershipPlan } from "@/app/generated/prisma/client";
 
@@ -21,7 +22,9 @@ export default function PlansPage() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this plan?")) return;
-    deletePlan.mutate(id);
+    deletePlan.mutate(id, {
+      onSuccess: () => posthog.capture("plan_deleted", { plan_id: id }),
+    });
   };
 
   return (
@@ -151,8 +154,10 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
 
     if (isEditing && plan) {
       await updatePlan.mutateAsync({ id: plan.id, data });
+      posthog.capture("plan_updated", { plan_id: plan.id, name: data.name, duration_days: data.durationDays, price: data.price });
     } else {
       await createPlan.mutateAsync(data);
+      posthog.capture("plan_created", { name: data.name, duration_days: data.durationDays, price: data.price });
     }
     onSuccess();
   });
