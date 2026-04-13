@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse, notFoundResponse, validationErrorResponse } from "@/lib/api-response";
 
 export async function POST(
   request: NextRequest,
@@ -9,19 +10,23 @@ export async function POST(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
     const body = await request.json();
     const { planId, amountPaid, paymentMode, startDate } = body;
 
+    if (!planId) {
+      return validationErrorResponse({ planId: "Plan is required" });
+    }
+
     const member = await prisma.member.findFirst({
       where: { id, gymOwnerId: session.user.id },
     });
 
     if (!member) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      return notFoundResponse("Member not found");
     }
 
     const plan = await prisma.membershipPlan.findUnique({
@@ -29,14 +34,14 @@ export async function POST(
     });
 
     if (!plan) {
-      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+      return notFoundResponse("Plan not found");
     }
 
     const start = startDate ? new Date(startDate) : new Date();
     const endDate = new Date(start);
     endDate.setDate(endDate.getDate() + plan.durationDays);
 
-    const membership = await prisma.membership.create({
+    await prisma.membership.create({
       data: {
         memberId: id,
         planId: plan.id,
@@ -46,14 +51,23 @@ export async function POST(
         paymentStatus: "PAID",
         paymentMode: paymentMode || "CASH",
       },
-      include: { plan: true },
     });
 
-    return NextResponse.json({ membership }, { status: 201 });
+    const updatedMember = await prisma.member.findUnique({
+      where: { id },
+      include: {
+        memberships: {
+          orderBy: { createdAt: "desc" },
+          include: { plan: true },
+        },
+      },
+    });
+
+    return successResponse(updatedMember, 201);
   } catch (error) {
     console.error("Error renewing membership:", error);
     return NextResponse.json(
-      { error: "Failed to renew membership" },
+      { data: null, error: { code: "RENEW_ERROR", message: "Failed to renew membership" } },
       { status: 500 }
     );
   }

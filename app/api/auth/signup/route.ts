@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { successResponse, errorResponse, validationErrorResponse } from "@/lib/api-response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,10 +9,11 @@ export async function POST(request: NextRequest) {
     const { name, email, password, gymName, phone } = body;
 
     if (!name || !email || !password) {
-      return NextResponse.json(
-        { error: "Name, email and password are required" },
-        { status: 400 }
-      );
+      return validationErrorResponse({
+        name: !name ? "Name is required" : null,
+        email: !email ? "Email is required" : null,
+        password: !password ? "Password is required" : null,
+      });
     }
 
     const existingUser = await prisma.gymOwner.findUnique({
@@ -19,10 +21,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 400 }
-      );
+      return errorResponse("User with this email already exists", "USER_EXISTS", 400);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -37,18 +36,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        message: "Account created successfully",
-        user: { id: user.id, name: user.name, email: user.email },
-      },
-      { status: 201 }
+    return successResponse(
+      { id: user.id, name: user.name, email: user.email },
+      201
     );
   } catch (error) {
     console.error("Signup error:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 }
-    );
+    return errorResponse("Something went wrong", "SIGNUP_ERROR", 500);
   }
 }

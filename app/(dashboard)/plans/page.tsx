@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -10,48 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Plus, CreditCard, Edit, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useForm } from "react-hook-form";
-
-interface Plan {
-  id: string;
-  name: string;
-  durationDays: number;
-  price: number;
-}
+import { usePlans, useCreatePlan, useUpdatePlan, useDeletePlan } from "@src/queries/plan.queries";
+import type { MembershipPlan } from "@/app/generated/prisma/client";
 
 export default function PlansPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const queryClient = useQueryClient();
+  const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null);
 
-  const {
-    data: plans = [],
-    isLoading,
-  } = useQuery<Plan[]>({
-    queryKey: ["plans"],
-    queryFn: async () => {
-      const res = await fetch("/api/plans");
-      const data = await res.json();
-      return data.plans || [];
-    },
-  });
+  const { data: plans = [], isLoading } = usePlans();
+  const deletePlan = useDeletePlan();
 
-  const deletePlanMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to delete plan");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["plans"] });
-    },
-  });
-
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this plan?")) return;
-    deletePlanMutation.mutate(id);
+    deletePlan.mutate(id);
   };
 
   return (
@@ -59,9 +29,7 @@ export default function PlansPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Membership Plans</h1>
-          <p className="text-slate-500 mt-1">
-            Create and manage your membership plans
-          </p>
+          <p className="text-slate-500 mt-1">Create and manage your membership plans</p>
         </div>
         <Button onClick={() => setIsAddModalOpen(true)}>
           <Plus className="w-5 h-5 mr-2" />
@@ -72,10 +40,7 @@ export default function PlansPage() {
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="h-40 bg-slate-100 rounded-2xl animate-pulse"
-            />
+            <div key={i} className="h-40 bg-slate-100 rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : plans.length === 0 ? (
@@ -113,15 +78,11 @@ export default function PlansPage() {
                   </button>
                 </div>
               </div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                {plan.name}
-              </h3>
+              <h3 className="text-lg font-semibold text-slate-900">{plan.name}</h3>
               <p className="text-2xl font-bold text-emerald-600 mt-1">
                 {formatCurrency(plan.price)}
               </p>
-              <p className="text-sm text-slate-500 mt-2">
-                {plan.durationDays} days
-              </p>
+              <p className="text-sm text-slate-500 mt-2">{plan.durationDays} days</p>
             </Card>
           ))}
         </div>
@@ -134,10 +95,7 @@ export default function PlansPage() {
         size="md"
       >
         <PlanForm
-          onSuccess={() => {
-            setIsAddModalOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["plans"] });
-          }}
+          onSuccess={() => setIsAddModalOpen(false)}
           onCancel={() => setIsAddModalOpen(false)}
         />
       </Modal>
@@ -151,10 +109,7 @@ export default function PlansPage() {
         {editingPlan && (
           <PlanForm
             plan={editingPlan}
-            onSuccess={() => {
-              setEditingPlan(null);
-              queryClient.invalidateQueries({ queryKey: ["plans"] });
-            }}
+            onSuccess={() => setEditingPlan(null)}
             onCancel={() => setEditingPlan(null)}
           />
         )}
@@ -164,58 +119,42 @@ export default function PlansPage() {
 }
 
 interface PlanFormProps {
-  plan?: Plan;
+  plan?: MembershipPlan;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
 function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
-  const { register, handleSubmit, setValue, formState, watch } = useForm<{
+  const createPlan = useCreatePlan();
+  const updatePlan = useUpdatePlan();
+
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<{
     name: string;
     durationDays: string;
     price: string;
   }>({
     defaultValues: {
       name: plan?.name || "",
-      durationDays:
-        typeof plan?.durationDays === "number"
-          ? plan.durationDays.toString()
-          : "30",
-      price:
-        typeof plan?.price === "number" ? plan.price.toString() : "",
+      durationDays: plan?.durationDays?.toString() || "30",
+      price: plan?.price?.toString() || "",
     },
   });
 
-  const { errors, isSubmitting } = formState;
+  const isEditing = !!plan;
 
-  const queryClient = useQueryClient();
+  const onSubmit = handleSubmit(async (values) => {
+    const data = {
+      name: values.name,
+      durationDays: parseInt(values.durationDays),
+      price: parseFloat(values.price),
+    };
 
-  const savePlanMutation = useMutation({
-    mutationFn: async (values: {
-      name: string;
-      durationDays: string;
-      price: string;
-    }) => {
-      const url = plan ? `/api/plans/${plan.id}` : "/api/plans";
-      const method = plan ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to save plan");
-      }
-
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["plans"] });
-      onSuccess();
-    },
+    if (isEditing && plan) {
+      await updatePlan.mutateAsync({ id: plan.id, data });
+    } else {
+      await createPlan.mutateAsync(data);
+    }
+    onSuccess();
   });
 
   const presetDurations = [
@@ -225,15 +164,14 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
     { label: "12 Months", days: 365 },
   ];
 
-  const onSubmit = handleSubmit(async (values) => {
-    await savePlanMutation.mutateAsync(values);
-  });
+  const activeMutation = isEditing ? updatePlan : createPlan;
+  const globalError = activeMutation.error instanceof Error ? activeMutation.error.message : "";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      {savePlanMutation.error instanceof Error && (
+      {globalError && (
         <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100">
-          {savePlanMutation.error.message}
+          {globalError}
         </div>
       )}
 
@@ -247,9 +185,7 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
       />
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Duration
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Duration</label>
         <div className="flex flex-wrap gap-2 mb-3">
           {presetDurations.map((preset) => (
             <button
@@ -270,9 +206,7 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
           id="durationDays"
           type="number"
           placeholder="Custom days"
-          {...register("durationDays", {
-            required: "Duration is required",
-          })}
+          {...register("durationDays", { required: "Duration is required" })}
           required
           error={errors.durationDays?.message}
         />
@@ -289,20 +223,15 @@ function PlanForm({ plan, onSuccess, onCancel }: PlanFormProps) {
       />
 
       <div className="flex gap-3 pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          className="flex-1"
-        >
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
           Cancel
         </Button>
         <Button
           type="submit"
-          isLoading={savePlanMutation.isPending || isSubmitting}
+          isLoading={activeMutation.isPending || isSubmitting}
           className="flex-1"
         >
-          {plan ? "Save Changes" : "Create Plan"}
+          {isEditing ? "Save Changes" : "Create Plan"}
         </Button>
       </div>
     </form>

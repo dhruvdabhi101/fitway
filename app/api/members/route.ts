@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse, validationErrorResponse } from "@/lib/api-response";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -43,19 +44,13 @@ export async function GET(request: NextRequest) {
       prisma.member.count({ where }),
     ]);
 
-    return NextResponse.json({
-      members,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
+    void total; // meta could be added later
+
+    return successResponse(members, 200);
   } catch (error) {
     console.error("Error fetching members:", error);
     return NextResponse.json(
-      { error: "Failed to fetch members" },
+      { data: null, error: { code: "FETCH_ERROR", message: "Failed to fetch members" } },
       { status: 500 }
     );
   }
@@ -65,17 +60,14 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const body = await request.json();
     const { name, phone, email, address, notes, photoUrl, joinDate, planId, amountPaid, paymentMode } = body;
 
     if (!name || !phone) {
-      return NextResponse.json(
-        { error: "Name and phone are required" },
-        { status: 400 }
-      );
+      return validationErrorResponse({ name: !name ? "Name is required" : null, phone: !phone ? "Phone is required" : null });
     }
 
     const member = await prisma.member.create({
@@ -115,11 +107,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ member }, { status: 201 });
+    const memberWithMemberships = await prisma.member.findUnique({
+      where: { id: member.id },
+      include: {
+        memberships: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: { plan: true },
+        },
+      },
+    });
+
+    return successResponse(memberWithMemberships, 201);
   } catch (error) {
     console.error("Error creating member:", error);
     return NextResponse.json(
-      { error: "Failed to create member" },
+      { data: null, error: { code: "CREATE_ERROR", message: "Failed to create member" } },
       { status: 500 }
     );
   }

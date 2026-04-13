@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const plans = await prisma.membershipPlan.findMany({
@@ -14,11 +15,11 @@ export async function GET() {
       orderBy: { price: "asc" },
     });
 
-    return NextResponse.json({ plans });
+    return successResponse(plans);
   } catch (error) {
     console.error("Error fetching plans:", error);
     return NextResponse.json(
-      { error: "Failed to fetch plans" },
+      { data: null, error: { code: "FETCH_ERROR", message: "Failed to fetch plans" } },
       { status: 500 }
     );
   }
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const body = await request.json();
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     if (!name || !durationDays || !price) {
       return NextResponse.json(
-        { error: "Name, duration, and price are required" },
+        { data: null, error: { code: "VALIDATION_ERROR", message: "Name, duration, and price are required" } },
         { status: 400 }
       );
     }
@@ -50,11 +51,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ plan }, { status: 201 });
+    return successResponse(plan, 201);
   } catch (error) {
     console.error("Error creating plan:", error);
     return NextResponse.json(
-      { error: "Failed to create plan" },
+      { data: null, error: { code: "CREATE_ERROR", message: "Failed to create plan" } },
       { status: 500 }
     );
   }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,26 +11,13 @@ import { Modal } from "@/components/ui/modal";
 import { AddMemberForm } from "@/components/members/add-member-form";
 import { Plus, Search, Users, Phone } from "lucide-react";
 import { getMembershipStatus, formatDate } from "@/lib/utils";
-
-interface Member {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  photoUrl: string | null;
-  joinDate: string;
-  memberships: {
-    id: string;
-    endDate: string;
-    plan: { name: string };
-  }[];
-}
+import { useMembers } from "@src/queries/member.queries";
+import type { MemberWithMemberships } from "@src/api/types";
 
 export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -40,24 +26,9 @@ export default function MembersPage() {
     return () => clearTimeout(timeout);
   }, [search]);
 
-  const {
-    data: members = [],
-    isLoading,
-  } = useQuery<Member[]>({
-    queryKey: ["members", debouncedSearch],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/members?search=${encodeURIComponent(debouncedSearch)}`
-      );
-      const data = await res.json();
-      return data.members || [];
-    },
+  const { data: members = [], isLoading } = useMembers({
+    search: debouncedSearch,
   });
-
-  const handleAddSuccess = () => {
-    setIsAddModalOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["members"] });
-  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -85,10 +56,7 @@ export default function MembersPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="h-20 bg-slate-100 rounded-2xl animate-pulse"
-            />
+            <div key={i} className="h-20 bg-slate-100 rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : members.length === 0 ? (
@@ -97,9 +65,7 @@ export default function MembersPage() {
             icon={Users}
             title={search ? "No members found" : "No members yet"}
             description={
-              search
-                ? "Try a different search term"
-                : "Add your first gym member to get started"
+              search ? "Try a different search term" : "Add your first gym member to get started"
             }
             action={
               !search
@@ -114,7 +80,7 @@ export default function MembersPage() {
       ) : (
         <div className="space-y-3">
           {members.map((member) => {
-            const currentMembership = member.memberships[0];
+            const currentMembership = (member as MemberWithMemberships).memberships[0];
             const status = currentMembership
               ? getMembershipStatus(currentMembership.endDate)
               : null;
@@ -138,9 +104,7 @@ export default function MembersPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-slate-900 truncate">
-                          {member.name}
-                        </h3>
+                        <h3 className="font-semibold text-slate-900 truncate">{member.name}</h3>
                         {status && (
                           <Badge
                             variant={
@@ -162,8 +126,7 @@ export default function MembersPage() {
                       </div>
                       {currentMembership && (
                         <p className="text-sm text-slate-500 mt-1">
-                          {currentMembership.plan.name} • Expires{" "}
-                          {formatDate(currentMembership.endDate)}
+                          {currentMembership.plan.name} - Expires {formatDate(currentMembership.endDate)}
                         </p>
                       )}
                     </div>
@@ -195,7 +158,10 @@ export default function MembersPage() {
         title="Add New Member"
         size="lg"
       >
-        <AddMemberForm onSuccess={handleAddSuccess} onCancel={() => setIsAddModalOpen(false)} />
+        <AddMemberForm
+          onSuccess={() => setIsAddModalOpen(false)}
+          onCancel={() => setIsAddModalOpen(false)}
+        />
       </Modal>
     </div>
   );

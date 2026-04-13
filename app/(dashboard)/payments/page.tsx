@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,44 +8,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { RenewMembershipForm } from "@/components/members/renew-membership-form";
-import { AlertCircle, Phone, RefreshCw, CheckCircle } from "lucide-react";
+import { Phone, RefreshCw, CheckCircle } from "lucide-react";
 import { formatDate, getMembershipStatus } from "@/lib/utils";
-
-interface Membership {
-  id: string;
-  memberId: string;
-  endDate: string;
-  member: {
-    id: string;
-    name: string;
-    phone: string;
-    photoUrl: string | null;
-  };
-  plan: {
-    name: string;
-  };
-}
-
-type FilterType = "all" | "overdue" | "expiring";
+import { usePaymentsDue } from "@src/queries/payment.queries";
+import type { PaymentFilter } from "@src/api/query-client";
 
 export default function PaymentsPage() {
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [filter, setFilter] = useState<PaymentFilter>("all");
   const [renewingMemberId, setRenewingMemberId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
-  const {
-    data: memberships = [],
-    isLoading,
-  } = useQuery<Membership[]>({
-    queryKey: ["payments-due", filter],
-    queryFn: async () => {
-      const res = await fetch(`/api/payments/due?filter=${filter}`);
-      const data = await res.json();
-      return data.memberships || [];
-    },
-  });
+  const { data: memberships = [], isLoading } = usePaymentsDue(filter);
 
-  const filters: { label: string; value: FilterType }[] = [
+  const filters: { label: string; value: PaymentFilter }[] = [
     { label: "All Due", value: "all" },
     { label: "Overdue", value: "overdue" },
     { label: "Expiring Soon", value: "expiring" },
@@ -56,9 +29,7 @@ export default function PaymentsPage() {
     <div className="p-4 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Payments Due</h1>
-        <p className="text-slate-500 mt-1">
-          Members with expired or expiring memberships
-        </p>
+        <p className="text-slate-500 mt-1">Members with expired or expiring memberships</p>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2">
@@ -80,10 +51,7 @@ export default function PaymentsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="h-24 bg-slate-100 rounded-2xl animate-pulse"
-            />
+            <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : memberships.length === 0 ? (
@@ -109,9 +77,7 @@ export default function PaymentsPage() {
             return (
               <Card
                 key={membership.id}
-                className={`p-4 border-l-4 ${
-                  isOverdue ? "border-l-red-500" : "border-l-amber-500"
-                }`}
+                className={`p-4 border-l-4 ${isOverdue ? "border-l-red-500" : "border-l-amber-500"}`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <Link
@@ -147,8 +113,7 @@ export default function PaymentsPage() {
                         {membership.member.phone}
                       </div>
                       <p className="text-sm text-slate-500 mt-1">
-                        {membership.plan.name} • Expired{" "}
-                        {formatDate(membership.endDate)}
+                        {membership.plan.name} - Expired {formatDate(membership.endDate)}
                       </p>
                     </div>
                   </Link>
@@ -176,10 +141,7 @@ export default function PaymentsPage() {
         {renewingMemberId && (
           <RenewMembershipForm
             memberId={renewingMemberId}
-            onSuccess={() => {
-              setRenewingMemberId(null);
-              queryClient.invalidateQueries({ queryKey: ["payments-due"] });
-            }}
+            onSuccess={() => setRenewingMemberId(null)}
             onCancel={() => setRenewingMemberId(null)}
           />
         )}

@@ -1,21 +1,13 @@
 "use client";
 
 import { useForm } from "react-hook-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-interface Member {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  address: string | null;
-  notes: string | null;
-}
+import { useUpdateMember } from "@src/queries/member.queries";
+import type { MemberWithMemberships, UpdateMemberInput } from "@src/api/types";
 
 interface EditMemberFormProps {
-  member: Member;
+  member: MemberWithMemberships;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -33,7 +25,7 @@ export function EditMemberForm({
   onSuccess,
   onCancel,
 }: EditMemberFormProps) {
-  const queryClient = useQueryClient();
+  const updateMember = useUpdateMember();
 
   const {
     register,
@@ -49,36 +41,20 @@ export function EditMemberForm({
     },
   });
 
-  const editMemberMutation = useMutation({
-    mutationFn: async (values: EditMemberFormValues) => {
-      const res = await fetch(`/api/members/${member.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to update member");
-      }
-
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["member", member.id] });
-      queryClient.invalidateQueries({ queryKey: ["members"] });
-      onSuccess();
-    },
-  });
-
   const onSubmit = handleSubmit(async (values) => {
-    await editMemberMutation.mutateAsync(values);
+    const data: UpdateMemberInput = {
+      name: values.name,
+      phone: values.phone,
+      email: values.email || undefined,
+      address: values.address || undefined,
+      notes: values.notes || undefined,
+    };
+    await updateMember.mutateAsync({ id: member.id, data });
+    onSuccess();
   });
 
   const globalError =
-    editMemberMutation.error instanceof Error
-      ? editMemberMutation.error.message
-      : "";
+    updateMember.error instanceof Error ? updateMember.error.message : "";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -135,7 +111,7 @@ export function EditMemberForm({
         </Button>
         <Button
           type="submit"
-          isLoading={editMemberMutation.isPending || isSubmitting}
+          isLoading={updateMember.isPending || isSubmitting}
           className="flex-1"
         >
           Save Changes

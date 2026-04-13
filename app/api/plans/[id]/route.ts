@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse, notFoundResponse } from "@/lib/api-response";
 
 export async function PUT(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function PUT(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
@@ -21,7 +22,7 @@ export async function PUT(
     });
 
     if (!existingPlan) {
-      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+      return notFoundResponse("Plan not found");
     }
 
     const plan = await prisma.membershipPlan.update({
@@ -33,11 +34,11 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ plan });
+    return successResponse(plan);
   } catch (error) {
     console.error("Error updating plan:", error);
     return NextResponse.json(
-      { error: "Failed to update plan" },
+      { data: null, error: { code: "UPDATE_ERROR", message: "Failed to update plan" } },
       { status: 500 }
     );
   }
@@ -50,7 +51,7 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
@@ -60,7 +61,7 @@ export async function DELETE(
     });
 
     if (!existingPlan) {
-      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+      return notFoundResponse("Plan not found");
     }
 
     await prisma.membershipPlan.update({
@@ -68,11 +69,11 @@ export async function DELETE(
       data: { isActive: false },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true });
   } catch (error) {
     console.error("Error deleting plan:", error);
     return NextResponse.json(
-      { error: "Failed to delete plan" },
+      { data: null, error: { code: "DELETE_ERROR", message: "Failed to delete plan" } },
       { status: 500 }
     );
   }

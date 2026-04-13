@@ -1,15 +1,17 @@
 "use client";
 
 import { useForm } from "react-hook-form";
-import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSignup } from "@src/queries/auth.queries";
 
 export default function SignupPage() {
   const router = useRouter();
+  const signup = useSignup();
+
   const {
     register,
     handleSubmit,
@@ -30,45 +32,12 @@ export default function SignupPage() {
     },
   });
 
-  const signupMutation = useMutation({
-    mutationFn: async (values: {
-      name: string;
-      email: string;
-      password: string;
-      gymName: string;
-      phone: string;
-    }) => {
-      if (values.password.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Something went wrong");
-      }
-
-      return data;
-    },
-    onSuccess: () => {
-      router.push("/login?registered=true");
-    },
-  });
-
   const onSubmit = handleSubmit(async (values) => {
-    await signupMutation.mutateAsync(values);
+    await signup.mutateAsync(values);
+    router.push("/login?registered=true");
   });
 
-  const globalError =
-    signupMutation.error instanceof Error
-      ? signupMutation.error.message
-      : "";
+  const globalError = signup.error instanceof Error ? signup.error.message : "";
 
   return (
     <Card className="border-0 shadow-xl">
@@ -141,7 +110,7 @@ export default function SignupPage() {
             type="submit"
             className="w-full"
             size="lg"
-            isLoading={signupMutation.isPending || isSubmitting}
+            isLoading={signup.isPending || isSubmitting}
           >
             Create Account
           </Button>
@@ -149,10 +118,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="font-medium text-emerald-600 hover:text-emerald-700"
-          >
+          <Link href="/login" className="font-medium text-emerald-600 hover:text-emerald-700">
             Sign in
           </Link>
         </p>

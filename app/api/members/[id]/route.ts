@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse, notFoundResponse } from "@/lib/api-response";
 
 export async function GET(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function GET(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
@@ -25,14 +26,14 @@ export async function GET(
     });
 
     if (!member) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      return notFoundResponse("Member not found");
     }
 
-    return NextResponse.json({ member });
+    return successResponse(member);
   } catch (error) {
     console.error("Error fetching member:", error);
     return NextResponse.json(
-      { error: "Failed to fetch member" },
+      { data: null, error: { code: "FETCH_ERROR", message: "Failed to fetch member" } },
       { status: 500 }
     );
   }
@@ -45,7 +46,7 @@ export async function PUT(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
@@ -57,7 +58,7 @@ export async function PUT(
     });
 
     if (!existingMember) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      return notFoundResponse("Member not found");
     }
 
     const member = await prisma.member.update({
@@ -70,13 +71,19 @@ export async function PUT(
         notes: notes || null,
         photoUrl: photoUrl || null,
       },
+      include: {
+        memberships: {
+          orderBy: { createdAt: "desc" },
+          include: { plan: true },
+        },
+      },
     });
 
-    return NextResponse.json({ member });
+    return successResponse(member);
   } catch (error) {
     console.error("Error updating member:", error);
     return NextResponse.json(
-      { error: "Failed to update member" },
+      { data: null, error: { code: "UPDATE_ERROR", message: "Failed to update member" } },
       { status: 500 }
     );
   }
@@ -89,7 +96,7 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { id } = await params;
@@ -99,7 +106,7 @@ export async function DELETE(
     });
 
     if (!existingMember) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      return notFoundResponse("Member not found");
     }
 
     await prisma.member.update({
@@ -107,11 +114,11 @@ export async function DELETE(
       data: { isActive: false },
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true });
   } catch (error) {
     console.error("Error deleting member:", error);
     return NextResponse.json(
-      { error: "Failed to delete member" },
+      { data: null, error: { code: "DELETE_ERROR", message: "Failed to delete member" } },
       { status: 500 }
     );
   }

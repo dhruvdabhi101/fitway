@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { successResponse, unauthorizedResponse } from "@/lib/api-response";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -47,11 +48,11 @@ export async function GET(request: NextRequest) {
       distinct: ["memberId"],
     });
 
-    return NextResponse.json({ memberships });
+    return successResponse(memberships);
   } catch (error) {
     console.error("Error fetching due payments:", error);
     return NextResponse.json(
-      { error: "Failed to fetch due payments" },
+      { data: null, error: { code: "FETCH_ERROR", message: "Failed to fetch due payments" } },
       { status: 500 }
     );
   }

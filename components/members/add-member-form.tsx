@@ -2,18 +2,13 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-
-interface Plan {
-  id: string;
-  name: string;
-  durationDays: number;
-  price: number;
-}
+import { usePlans } from "@src/queries/plan.queries";
+import { useCreateMember } from "@src/queries/member.queries";
+import type { MembershipPlan } from "@/app/generated/prisma/client";
 
 interface AddMemberFormProps {
   onSuccess: () => void;
@@ -32,27 +27,15 @@ interface AddMemberFormValues {
 }
 
 export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
-  const queryClient = useQueryClient();
-
-  const {
-    data: plans = [],
-    isLoading: isPlansLoading,
-    error: plansError,
-  } = useQuery<Plan[]>({
-    queryKey: ["plans"],
-    queryFn: async () => {
-      const res = await fetch("/api/plans");
-      const data = await res.json();
-      return data.plans || [];
-    },
-  });
+  const { data: plans = [], isLoading: isPlansLoading } = usePlans();
+  const createMember = useCreateMember();
 
   const {
     register,
     handleSubmit,
     watch,
-    reset,
     setValue,
+    reset,
     formState: { isSubmitting, errors },
   } = useForm<AddMemberFormValues>({
     defaultValues: {
@@ -68,8 +51,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
   });
 
   const selectedPlanId = watch("planId");
-  const plansMap = plans as Plan[];
-  const selectedPlan = plansMap.find((p) => p.id === selectedPlanId);
+  const selectedPlan = (plans as MembershipPlan[]).find((p) => p.id === selectedPlanId);
 
   useEffect(() => {
     if (!selectedPlanId) {
@@ -77,42 +59,23 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
     }
   }, [selectedPlanId, setValue]);
 
-  const addMemberMutation = useMutation({
-    mutationFn: async (values: AddMemberFormValues) => {
-      const res = await fetch("/api/members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...values,
-          amountPaid: values.amountPaid
-            ? parseFloat(values.amountPaid)
-            : selectedPlan?.price,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to add member");
-      }
-
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["members"] });
-      reset();
-      onSuccess();
-    },
-  });
-
   const onSubmit = handleSubmit(async (values) => {
-    await addMemberMutation.mutateAsync(values);
+    await createMember.mutateAsync({
+      name: values.name,
+      phone: values.phone,
+      email: values.email || undefined,
+      address: values.address || undefined,
+      notes: values.notes || undefined,
+      planId: values.planId || undefined,
+      amountPaid: values.amountPaid ? parseFloat(values.amountPaid) : undefined,
+      paymentMode: values.paymentMode as "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER",
+    });
+    reset();
+    onSuccess();
   });
 
   const globalError =
-    (plansError instanceof Error && plansError.message) ||
-    (addMemberMutation.error instanceof Error &&
-      addMemberMutation.error.message) ||
-    "";
+    (createMember.error instanceof Error && createMember.error.message) || "";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -167,8 +130,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
           <option value="">Select a plan (optional)</option>
           {plans.map((plan) => (
             <option key={plan.id} value={plan.id}>
-              {plan.name} - {formatCurrency(plan.price)} ({plan.durationDays}{" "}
-              days)
+              {plan.name} - {formatCurrency(plan.price)} ({plan.durationDays} days)
             </option>
           ))}
         </Select>
@@ -215,7 +177,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         </Button>
         <Button
           type="submit"
-          isLoading={addMemberMutation.isPending || isSubmitting || isPlansLoading}
+          isLoading={createMember.isPending || isSubmitting || isPlansLoading}
           className="flex-1"
         >
           Add Member

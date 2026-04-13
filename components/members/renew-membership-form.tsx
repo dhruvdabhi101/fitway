@@ -2,18 +2,13 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-
-interface Plan {
-  id: string;
-  name: string;
-  durationDays: number;
-  price: number;
-}
+import { usePlans } from "@src/queries/plan.queries";
+import { useRenewMembership } from "@src/queries/member.queries";
+import type { MembershipPlan } from "@/app/generated/prisma/client";
 
 interface RenewMembershipFormProps {
   memberId: string;
@@ -33,20 +28,8 @@ export function RenewMembershipForm({
   onSuccess,
   onCancel,
 }: RenewMembershipFormProps) {
-  const queryClient = useQueryClient();
-
-  const {
-    data: plans = [],
-    isLoading: isPlansLoading,
-    error: plansError,
-  } = useQuery<Plan[]>({
-    queryKey: ["plans"],
-    queryFn: async () => {
-      const res = await fetch("/api/plans");
-      const data = await res.json();
-      return data.plans || [];
-    },
-  });
+  const { data: plans = [], isLoading: isPlansLoading } = usePlans();
+  const renewMembership = useRenewMembership();
 
   const defaultStartDate = new Date().toISOString().split("T")[0];
 
@@ -66,7 +49,7 @@ export function RenewMembershipForm({
   });
 
   const selectedPlanId = watch("planId");
-  const selectedPlan = (plans as Plan[]).find((p) => p.id === selectedPlanId);
+  const selectedPlan = (plans as MembershipPlan[]).find((p) => p.id === selectedPlanId);
 
   useEffect(() => {
     if (plans.length > 0 && !selectedPlanId) {
@@ -74,46 +57,25 @@ export function RenewMembershipForm({
     }
   }, [plans, selectedPlanId, setValue]);
 
-  const renewMembershipMutation = useMutation({
-    mutationFn: async (values: RenewMembershipFormValues) => {
-      if (!values.planId) {
-        throw new Error("Please select a plan");
-      }
-
-      const res = await fetch(`/api/members/${memberId}/renew`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...values,
-          amountPaid: values.amountPaid
-            ? parseFloat(values.amountPaid)
-            : selectedPlan?.price,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to renew membership");
-      }
-
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["member", memberId] });
-      queryClient.invalidateQueries({ queryKey: ["payments-due"] });
-      onSuccess();
-    },
-  });
-
   const onSubmit = handleSubmit(async (values) => {
-    await renewMembershipMutation.mutateAsync(values);
+    if (!values.planId) {
+      throw new Error("Please select a plan");
+    }
+
+    await renewMembership.mutateAsync({
+      id: memberId,
+      data: {
+        planId: values.planId,
+        amountPaid: values.amountPaid ? parseFloat(values.amountPaid) : undefined,
+        paymentMode: values.paymentMode as "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER",
+        startDate: values.startDate,
+      },
+    });
+    onSuccess();
   });
 
   const globalError =
-    (plansError instanceof Error && plansError.message) ||
-    (renewMembershipMutation.error instanceof Error &&
-      renewMembershipMutation.error.message) ||
-    "";
+    (renewMembership.error instanceof Error && renewMembership.error.message) || "";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -147,8 +109,7 @@ export function RenewMembershipForm({
           >
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>
-                {plan.name} - {formatCurrency(plan.price)} ({plan.durationDays}{" "}
-                days)
+                {plan.name} - {formatCurrency(plan.price)} ({plan.durationDays} days)
               </option>
             ))}
           </Select>
@@ -193,9 +154,7 @@ export function RenewMembershipForm({
             </Button>
             <Button
               type="submit"
-              isLoading={
-                renewMembershipMutation.isPending || isSubmitting || isPlansLoading
-              }
+              isLoading={renewMembership.isPending || isSubmitting || isPlansLoading}
               className="flex-1"
             >
               Renew Membership
