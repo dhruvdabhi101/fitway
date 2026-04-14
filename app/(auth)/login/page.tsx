@@ -16,12 +16,19 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    acceptTerms: false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+
+    if (!formData.acceptTerms) {
+      setError("Please accept the Terms of Service and Privacy Policy");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const result = await signIn("credentials", {
@@ -83,6 +90,28 @@ export default function LoginPage() {
             }
             required
           />
+
+          <div className="flex items-start gap-3">
+            <input
+              id="acceptTerms"
+              type="checkbox"
+              checked={formData.acceptTerms}
+              onChange={(e) =>
+                setFormData({ ...formData, acceptTerms: e.target.checked })
+              }
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+            />
+            <label htmlFor="acceptTerms" className="text-sm text-slate-600">
+              I agree to the{" "}
+              <Link href="/terms" className="text-emerald-600 hover:text-emerald-700 font-medium">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-emerald-600 hover:text-emerald-700 font-medium">
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
 
           <Button
             type="submit"
