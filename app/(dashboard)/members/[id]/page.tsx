@@ -57,8 +57,12 @@ export default function MemberProfilePage({
     );
   }
 
-  const currentMembership = (member as MemberWithMemberships).memberships[0];
+  const allMemberships = (member as MemberWithMemberships).memberships;
+  const currentMembership = allMemberships.length > 0
+    ? allMemberships.reduce((latest, m) => new Date(m.endDate) > new Date(latest.endDate) ? m : latest)
+    : null;
   const status = currentMembership ? getMembershipStatus(currentMembership.endDate) : null;
+  const membershipHistory = allMemberships.filter((m) => m.id !== currentMembership?.id);
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -85,15 +89,6 @@ export default function MemberProfilePage({
             <div className="flex-1 text-center sm:text-left">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
                 <h2 className="text-xl font-bold text-slate-900">{member.name}</h2>
-                {status && (
-                  <Badge
-                    variant={
-                      status.status === "active" ? "success" : status.status === "expiring" ? "warning" : "danger"
-                    }
-                  >
-                    {status.label}
-                  </Badge>
-                )}
               </div>
 
               <div className="space-y-1.5 text-slate-600">
@@ -148,25 +143,34 @@ export default function MemberProfilePage({
       {currentMembership && (
         <Card>
           <CardHeader>
-            <h3 className="text-lg font-semibold text-slate-900">Current Membership</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Current Membership</h3>
+              <Badge
+                variant={
+                  status?.status === "active" ? "success" : status?.status === "expiring" ? "warning" : "danger"
+                }
+              >
+                {status?.label}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <p className="text-sm text-slate-500">Plan</p>
-                <p className="font-medium text-slate-900">{currentMembership.plan.name}</p>
+                <p className="text-xs text-slate-500 mb-1">Plan</p>
+                <p className="font-medium text-slate-900 text-sm lg:text-base">{currentMembership.plan.name}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">Start Date</p>
-                <p className="font-medium text-slate-900">{formatDate(currentMembership.startDate)}</p>
+                <p className="text-xs text-slate-500 mb-1">Start</p>
+                <p className="font-medium text-slate-900 text-sm lg:text-base">{formatDate(currentMembership.startDate)}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">End Date</p>
-                <p className="font-medium text-slate-900">{formatDate(currentMembership.endDate)}</p>
+                <p className="text-xs text-slate-500 mb-1">End</p>
+                <p className="font-medium text-slate-900 text-sm lg:text-base">{formatDate(currentMembership.endDate)}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">Amount Paid</p>
-                <p className="font-medium text-slate-900">{formatCurrency(currentMembership.amountPaid)}</p>
+                <p className="text-xs text-slate-500 mb-1">Paid</p>
+                <p className="font-medium text-slate-900 text-sm lg:text-base">{formatCurrency(currentMembership.amountPaid)}</p>
               </div>
             </div>
           </CardContent>
@@ -178,21 +182,21 @@ export default function MemberProfilePage({
           <h3 className="text-lg font-semibold text-slate-900">Membership History</h3>
         </CardHeader>
         <CardContent className="p-0">
-          {(member as MemberWithMemberships).memberships.length === 0 ? (
-            <div className="p-5 text-center text-slate-500">No membership history</div>
+          {membershipHistory.length === 0 ? (
+            <div className="p-5 text-center text-slate-500">No past memberships</div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {(member as MemberWithMemberships).memberships.map((membership) => (
+              {membershipHistory.map((membership) => (
                 <div key={membership.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <p className="font-medium text-slate-900">{membership.plan.name}</p>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-xs text-slate-500">
                       {formatDate(membership.startDate)} - {formatDate(membership.endDate)}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant="default">{membership.paymentMode}</Badge>
-                    <span className="font-medium text-slate-900">{formatCurrency(membership.amountPaid)}</span>
+                    <span className="font-medium text-slate-900 text-sm">{formatCurrency(membership.amountPaid)}</span>
                   </div>
                 </div>
               ))}

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, phone, email, address, notes, photoUrl, joinDate, planId, amountPaid, paymentMode } = body;
+    const { name, phone, email, address, notes, photoUrl, joinDate, planId, amountPaid, paymentMode, startDate } = body;
 
     if (!name || !phone) {
       return validationErrorResponse({ name: !name ? "Name is required" : null, phone: !phone ? "Phone is required" : null });
@@ -90,15 +90,15 @@ export async function POST(request: NextRequest) {
       });
 
       if (plan) {
-        const startDate = new Date();
-        const endDate = new Date();
+        const membershipStartDate = startDate ? new Date(startDate) : new Date();
+        const endDate = new Date(membershipStartDate);
         endDate.setDate(endDate.getDate() + plan.durationDays);
 
         await prisma.membership.create({
           data: {
             memberId: member.id,
             planId: plan.id,
-            startDate,
+            startDate: membershipStartDate,
             endDate,
             amountPaid: amountPaid || plan.price,
             paymentStatus: "PAID",

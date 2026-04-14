@@ -25,11 +25,14 @@ interface AddMemberFormValues {
   planId: string;
   amountPaid: string;
   paymentMode: string;
+  startDate: string;
 }
 
 export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
   const { data: plans = [], isLoading: isPlansLoading } = usePlans();
   const createMember = useCreateMember();
+
+  const defaultStartDate = new Date().toISOString().split("T")[0];
 
   const {
     register,
@@ -48,6 +51,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
       planId: "",
       amountPaid: "",
       paymentMode: "CASH",
+      startDate: "",
     },
   });
 
@@ -70,6 +74,7 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
       planId: values.planId || undefined,
       amountPaid: values.amountPaid ? parseFloat(values.amountPaid) : undefined,
       paymentMode: values.paymentMode as "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER",
+      startDate: values.startDate || undefined,
     });
     posthog.capture("member_added", {
       plan_id: values.planId || null,
@@ -143,25 +148,34 @@ export function AddMemberForm({ onSuccess, onCancel }: AddMemberFormProps) {
         </Select>
 
         {selectedPlanId && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <div className="space-y-4 mt-4">
             <Input
-              id="amountPaid"
-              type="number"
-              label="Amount Paid"
-              placeholder={selectedPlan ? `${selectedPlan.price}` : "0"}
-              {...register("amountPaid")}
+              id="startDate"
+              type="date"
+              label="Membership Start Date"
+              placeholder={defaultStartDate}
+              {...register("startDate")}
             />
-            <Select
-              id="paymentMode"
-              label="Payment Mode"
-              {...register("paymentMode")}
-            >
-              <option value="CASH">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="CARD">Card</option>
-              <option value="BANK_TRANSFER">Bank Transfer</option>
-              <option value="OTHER">Other</option>
-            </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                id="amountPaid"
+                type="number"
+                label="Amount Paid"
+                placeholder={selectedPlan ? `${selectedPlan.price}` : "0"}
+                {...register("amountPaid")}
+              />
+              <Select
+                id="paymentMode"
+                label="Payment Mode"
+                {...register("paymentMode")}
+              >
+                <option value="CASH">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="CARD">Card</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+                <option value="OTHER">Other</option>
+              </Select>
+            </div>
           </div>
         )}
       </div>

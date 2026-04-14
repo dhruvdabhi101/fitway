@@ -47,6 +47,7 @@ export interface CreateMemberInput {
   planId?: string;
   amountPaid?: number;
   paymentMode?: string;
+  startDate?: string;
 }
 
 export interface UpdateMemberInput {
