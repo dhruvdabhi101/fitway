@@ -8,8 +8,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { RenewMembershipForm } from "@/components/members/renew-membership-form";
-import { Phone, RefreshCw, CheckCircle } from "lucide-react";
-import { formatDate, getMembershipStatus } from "@/lib/utils";
+import { Phone, RefreshCw, CheckCircle, MessageCircle } from "lucide-react";
+import { formatDate, getMembershipStatus, getWhatsAppLink, getMembershipReminderMessage } from "@/lib/utils";
 import { usePaymentsDue } from "@src/queries/payment.queries";
 import type { PaymentFilter } from "@src/api/query-client";
 
@@ -117,14 +117,33 @@ export default function PaymentsPage() {
                       </p>
                     </div>
                   </Link>
-                  <Button
-                    size="sm"
-                    onClick={() => setRenewingMemberId(membership.member.id)}
-                    className="flex-shrink-0"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Renew
-                  </Button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      href={getWhatsAppLink(
+                        membership.member.phone,
+                        getMembershipReminderMessage(
+                          membership.member.name,
+                          membership.plan.name,
+                          membership.endDate,
+                          status.daysLeft
+                        )
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Remind
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setRenewingMemberId(membership.member.id)}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Renew
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );

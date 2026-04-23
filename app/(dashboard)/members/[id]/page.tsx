@@ -19,8 +19,9 @@ import {
   RefreshCw,
   Trash2,
   FileText,
+  MessageCircle,
 } from "lucide-react";
-import { formatDate, formatCurrency, getMembershipStatus } from "@/lib/utils";
+import { formatDate, formatCurrency, getMembershipStatus, getWhatsAppLink, getMembershipReminderMessage } from "@/lib/utils";
 import posthog from "posthog-js";
 import { useMember, useDeleteMember } from "@src/queries/member.queries";
 import type { MemberWithMemberships } from "@src/api/types";
@@ -128,6 +129,25 @@ export default function MemberProfilePage({
               <RefreshCw className="w-4 h-4 mr-2" />
               Renew Membership
             </Button>
+            {member.phone && currentMembership && (
+              <Button
+                variant="outline"
+                href={getWhatsAppLink(
+                  member.phone,
+                  getMembershipReminderMessage(
+                    member.name,
+                    currentMembership.plan.name,
+                    currentMembership.endDate,
+                    getMembershipStatus(currentMembership.endDate).daysLeft
+                  )
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Send Reminder
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
               <Edit className="w-4 h-4 mr-2" />
               Edit

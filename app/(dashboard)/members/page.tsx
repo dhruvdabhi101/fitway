@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { AddMemberForm } from "@/components/members/add-member-form";
-import { Plus, Search, Users, Phone } from "lucide-react";
-import { getMembershipStatus, formatDate } from "@/lib/utils";
+import { Plus, Search, Users, Phone, MessageCircle } from "lucide-react";
+import { getMembershipStatus, formatDate, getWhatsAppLink, getMembershipReminderMessage } from "@/lib/utils";
 import { useMembers } from "@src/queries/member.queries";
 import type { MemberWithMemberships } from "@src/api/types";
 
@@ -86,9 +86,9 @@ export default function MembersPage() {
               : null;
 
             return (
-              <Link key={member.id} href={`/members/${member.id}`}>
-                <Card className="p-4 hover:border-emerald-200 hover:shadow-md transition-all duration-200 cursor-pointer">
-                  <div className="flex items-center gap-4">
+              <Card key={member.id} className="p-4 hover:border-emerald-200 hover:shadow-md transition-all duration-200">
+                <div className="flex items-center gap-4">
+                  <Link href={`/members/${member.id}`} className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center overflow-hidden shrink-0">
                       {member.photoUrl ? (
                         <img
@@ -144,9 +144,30 @@ export default function MembersPage() {
                         {status.label}
                       </Badge>
                     )}
-                  </div>
-                </Card>
-              </Link>
+                  </Link>
+                  {member.phone && currentMembership && status && status.status !== "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 px-2.5"
+                      href={getWhatsAppLink(
+                        member.phone,
+                        getMembershipReminderMessage(
+                          member.name,
+                          currentMembership.plan.name,
+                          currentMembership.endDate,
+                          status.daysLeft
+                        )
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Send WhatsApp Reminder"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                    </Button>
+                  )}
+                </div>
+              </Card>
             );
           })}
         </div>
